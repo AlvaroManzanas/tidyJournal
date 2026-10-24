@@ -1,0 +1,95 @@
+---
+title: "readme"
+format: 
+  gfm: default
+---
+
+# Which College Majors Are Safest From AI (and Do They Pay)?
+
+## Introduction
+
+[Source](https://github.com/rfordatascience/tidytuesday/blob/2684157e38895b3bbe8e8169a434b757489a506e/data/2026/2026-10-20/intro.md)
+
+This week we're looking at which college majors are safest from AI, and whether the safe ones actually pay well.
+
+The dataset joins three public sources at the level of the college major. Starting salaries come from the U.S. Department of Education's [College Scorecard](https://collegescorecard.ed.gov/data/) field-of-study files, using median earnings one year after graduation for bachelor's degrees. AI disruption risk comes from the [AI Occupational Exposure (AIOE) index](https://github.com/AIOE-Data/AIOE) of Felten, Raj and Seamans (2021), which scores how much each occupation's required abilities overlap with what AI can do. It also includes separate scores for language tasks and image tasks. To connect the two, I used the [NCES/BLS CIP-to-SOC crosswalk](https://nces.ed.gov/ipeds/cipcode/resources.aspx), which maps fields of study to the occupations their graduates tend to enter.
+
+The result is 285 majors, each with a starting salary and an AI exposure score. What stands out is that the two barely relate to each other (r is about 0.01). Hands-on technical fields like nuclear, marine, and aerospace engineering technology show low exposure and high pay. Registered nursing sits near the 20th percentile of AI exposure and pays around $75,000 to start. On the other end, several humanities majors are both highly exposed and among the lowest paid.
+
+One thing to know about the exposure score: the AIOE is standardized to a mean of 0 and a standard deviation of 1. A value of 0 is an average occupation, and negative values fall below average. High exposure does not necessarily mean a job will be automated away, since AI can also assist the work rather than replace it. So that you don't need a stats background to read it, the main table also includes `ai_exposure_percentile`, a plain 0 to 100 rank across all majors.
+
+> The AIOE links ten common AI applications with fifty-two distinct occupational abilities used by O*NET and uses the relative prevalence of these abilities within an occupation to generate an occupational measure of AI exposure. (Felten, Raj and Seamans 2021; description rephrased for compliance with licensing restrictions.)
+
+Some questions to explore:
+
+- Which majors are both safe from AI and well paid, and which are both exposed and low paid?
+- Does the picture change when you look at language-task exposure versus image-task exposure?
+- Do broad fields like Engineering, Health Professions, Business, and Humanities cluster together?
+- The AIOE measures exposure, not automation. How would the story change if high exposure mostly meant AI assisting the work rather than replacing it?
+
+## Data Dictionary
+
+### AI Salary Mayors
+
+[Source](https://github.com/rfordatascience/tidytuesday/blob/2684157e38895b3bbe8e8169a434b757489a506e/data/2026/2026-10-20/ai_salary_majors.md).
+
+| variable | class | description |
+|:--------------------|:---------------|:----------------------------------|
+| cip4 | character | Four-digit Classification of Instructional Programs (CIP) 2020 code identifying the field of study. |
+| field_of_study | character | Human-readable name of the college major (from the College Scorecard CIP description). |
+| broad_field | character | Official NCES title of the two-digit CIP family the major belongs to (from the CIP 2020 code file), title-cased with the trailing period removed. For example, CIP family 52 is "Business, Management, Marketing, and Related Support Services". |
+| broad_field_short | character | A short, chart-friendly label for the CIP family, keyed to the two-digit family code. This is a convenience label for plotting and grouping, not an official NCES title (e.g. the family above is shortened to "Business"). |
+| median_starting_salary | double | Median earnings in US dollars one year after graduation, pooled across institutions offering the major (bachelor's degree graduates). This is the starting-salary measure. |
+| median_salary_4yr | double | Median earnings in US dollars four years after graduation, pooled across institutions. Missing for a few majors without four-year follow-up data. |
+| ai_exposure | double | Average AI Occupational Exposure (AIOE) score across the occupations this major feeds into. The AIOE is standardized (mean 0, standard deviation 1); higher values mean more of the occupation's abilities overlap with what AI can do. |
+| ai_exposure_percentile | double | Rank of this major's AI exposure on a 0 to 100 scale relative to all 285 majors in the dataset. 0 is the least AI-exposed major, 100 the most. |
+| ai_exposure_language | double | Average AIOE score for the language-modeling application of generative AI (text-based tasks) across the major's occupations. Standardized like ai_exposure. |
+| ai_exposure_image | double | Average AIOE score for the image-generation application of generative AI (visual tasks) across the major's occupations. Standardized like ai_exposure. |
+| n_occupations | integer | Number of distinct occupations (SOC codes) the major maps to in the CIP-SOC crosswalk; the exposure scores are averaged over these occupations. |
+| n_institutions | integer | Number of institutions whose graduates contributed to the pooled starting-salary figure for this major. |
+| n_graduates | double | Total count of graduates with measured earnings one year out, summed across institutions offering the major. |
+
+### Major Occupations
+
+[Source](https://github.com/rfordatascience/tidytuesday/blob/2684157e38895b3bbe8e8169a434b757489a506e/data/2026/2026-10-20/major_occupations.md).
+
+| variable | class | description |
+|:-------------------|:---------------|:-----------------------------------|
+| cip4 | character | Four-digit CIP 2020 code for the field of study; joins to `cip4` in the ai_salary_majors table. |
+| field_of_study | character | Name of the college major from the CIP-SOC crosswalk. |
+| soc | character | Six-digit Standard Occupational Classification (SOC) 2018 code for an occupation this major can lead to. |
+| occupation | character | Human-readable occupation title for the SOC code. |
+| ai_exposure | double | Overall AI Occupational Exposure (AIOE) score for this occupation. Standardized (mean 0, SD 1); higher means more exposed to AI. |
+| ai_exposure_language | double | AIOE score for the language-modeling application of generative AI for this occupation. |
+| ai_exposure_image | double | AIOE score for the image-generation application of generative AI for this occupation. |
+
+## Data
+
+```{r}
+pcks <- c(
+    'fastverse', 'tidytable',
+    'arrow', 'duckdb', 'duckplyr', 'dbplyr',
+    'tinyplot', # plots
+    )
+
+for (pkg in pcks) {
+        if (!require(pkg, character.only = TRUE, quietly = TRUE)) {
+            install.packages(pkg)
+            suppressPackageStartupMessages({
+                library(pkg, character.only = TRUE)
+                })
+        }
+    }
+
+rm(list = ls(all.names = TRUE)) 
+
+set.seed(1994)
+afex_options(check_contrasts = FALSE, es_aov = "pes", include_aov = TRUE)
+set_summ_defaults(digits = 4)
+```
+
+```{r}
+ai_salary_majors <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/main/data/2026/2026-10-20/ai_salary_majors.csv')
+major_occupations <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/main/data/2026/2026-10-20/major_occupations.csv')
+```
+
