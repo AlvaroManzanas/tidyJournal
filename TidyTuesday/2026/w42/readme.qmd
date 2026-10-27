@@ -14,11 +14,11 @@ This week we're looking at which college majors are safest from AI, and whether 
 
 The dataset joins three public sources at the level of the college major. Starting salaries come from the U.S. Department of Education's [College Scorecard](https://collegescorecard.ed.gov/data/) field-of-study files, using median earnings one year after graduation for bachelor's degrees. AI disruption risk comes from the [AI Occupational Exposure (AIOE) index](https://github.com/AIOE-Data/AIOE) of Felten, Raj and Seamans (2021), which scores how much each occupation's required abilities overlap with what AI can do. It also includes separate scores for language tasks and image tasks. To connect the two, I used the [NCES/BLS CIP-to-SOC crosswalk](https://nces.ed.gov/ipeds/cipcode/resources.aspx), which maps fields of study to the occupations their graduates tend to enter.
 
-The result is 285 majors, each with a starting salary and an AI exposure score. What stands out is that the two barely relate to each other (r is about 0.01). Hands-on technical fields like nuclear, marine, and aerospace engineering technology show low exposure and high pay. Registered nursing sits near the 20th percentile of AI exposure and pays around $75,000 to start. On the other end, several humanities majors are both highly exposed and among the lowest paid.
+The result is 285 majors, each with a starting salary and an AI exposure score. What stands out is that the two barely relate to each other (r is about 0.01). Hands-on technical fields like nuclear, marine, and aerospace engineering technology show low exposure and high pay. Registered nursing sits near the 20th percentile of AI exposure and pays around \$75,000 to start. On the other end, several humanities majors are both highly exposed and among the lowest paid.
 
 One thing to know about the exposure score: the AIOE is standardized to a mean of 0 and a standard deviation of 1. A value of 0 is an average occupation, and negative values fall below average. High exposure does not necessarily mean a job will be automated away, since AI can also assist the work rather than replace it. So that you don't need a stats background to read it, the main table also includes `ai_exposure_percentile`, a plain 0 to 100 rank across all majors.
 
-> The AIOE links ten common AI applications with fifty-two distinct occupational abilities used by O*NET and uses the relative prevalence of these abilities within an occupation to generate an occupational measure of AI exposure. (Felten, Raj and Seamans 2021; description rephrased for compliance with licensing restrictions.)
+> The AIOE links ten common AI applications with fifty-two distinct occupational abilities used by O\*NET and uses the relative prevalence of these abilities within an occupation to generate an occupational measure of AI exposure. (Felten, Raj and Seamans 2021; description rephrased for compliance with licensing restrictions.)
 
 Some questions to explore:
 
@@ -34,7 +34,7 @@ Some questions to explore:
 [Source](https://github.com/rfordatascience/tidytuesday/blob/2684157e38895b3bbe8e8169a434b757489a506e/data/2026/2026-10-20/ai_salary_majors.md).
 
 | variable | class | description |
-|:--------------------|:---------------|:----------------------------------|
+|:--------------------|:------------------|:-------------------------------|
 | cip4 | character | Four-digit Classification of Instructional Programs (CIP) 2020 code identifying the field of study. |
 | field_of_study | character | Human-readable name of the college major (from the College Scorecard CIP description). |
 | broad_field | character | Official NCES title of the two-digit CIP family the major belongs to (from the CIP 2020 code file), title-cased with the trailing period removed. For example, CIP family 52 is "Business, Management, Marketing, and Related Support Services". |
@@ -54,7 +54,7 @@ Some questions to explore:
 [Source](https://github.com/rfordatascience/tidytuesday/blob/2684157e38895b3bbe8e8169a434b757489a506e/data/2026/2026-10-20/major_occupations.md).
 
 | variable | class | description |
-|:-------------------|:---------------|:-----------------------------------|
+|:-------------------|:------------------|:--------------------------------|
 | cip4 | character | Four-digit CIP 2020 code for the field of study; joins to `cip4` in the ai_salary_majors table. |
 | field_of_study | character | Name of the college major from the CIP-SOC crosswalk. |
 | soc | character | Six-digit Standard Occupational Classification (SOC) 2018 code for an occupation this major can lead to. |
@@ -65,31 +65,116 @@ Some questions to explore:
 
 ## Data
 
-```{r}
+```{r, load_packages}
+#| message: false 
+#| warning: false 
+
 pcks <- c(
-    'fastverse', 'tidytable',
-    'arrow', 'duckdb', 'duckplyr', 'dbplyr',
-    'tinyplot', # plots
+    'fastverse', 'tidytable', 'psych',
+    #'dbplyr', 'arrow', 'duckdb', 'duckplyr', 
+    #'ggplot2' 
+    'tinyplot' # plots 
     )
 
-for (pkg in pcks) {
-        if (!require(pkg, character.only = TRUE, quietly = TRUE)) {
+for (pkg in pcks) { 
+    if (!require(pkg, character.only = TRUE, quietly = TRUE)) { 
             install.packages(pkg)
-            suppressPackageStartupMessages({
-                library(pkg, character.only = TRUE)
-                })
-        }
-    }
+            suppressPackageStartupMessages({ 
+                library(pkg, character.only = TRUE) 
+                }) 
+    } 
+}
 
-rm(list = ls(all.names = TRUE)) 
+rm(list = ls(all.names = TRUE))
 
 set.seed(1994)
-afex_options(check_contrasts = FALSE, es_aov = "pes", include_aov = TRUE)
-set_summ_defaults(digits = 4)
+```
+
+``` r
+con <- dbConnect(duckdb(), dbdir = ":memory:")
+
+ai_salary_majors <- read_csv_arrow('https://raw.githubusercontent.com/rfordatascience/tidytuesday/main/data/2026/2026-10-20/ai_salary_majors.csv', as_data_frame = F)
+
+ai_salary_majors <- to_duckdb(ai_salary_majors, con, table_name = 'ai_salary_majors')
+
+major_occupations <- read_csv_arrow('https://raw.githubusercontent.com/rfordatascience/tidytuesday/main/data/2026/2026-10-20/major_occupations.csv', as_data_frame = F)
+
+major_occupations <- to_duckdb(major_occupations, con, table_name = 'major_occupations')
 ```
 
 ```{r}
 ai_salary_majors <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/main/data/2026/2026-10-20/ai_salary_majors.csv')
-major_occupations <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/main/data/2026/2026-10-20/major_occupations.csv')
+majors_occupations <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/main/data/2026/2026-10-20/major_occupations.csv')
 ```
+
+```{r}
+describe(ai_salary_majors)
+
+```
+
+```{r}
+for (var in colnames(ai_salary_majors)){
+    print(
+        paste(var, round(sum(is.na(ai_salary_majors[var]) ) /
+                  nrow(ai_salary_majors) * 100,3),'%')
+    )
+}
+```
+
+```{r}
+for (var in colnames(majors_occupations)){
+    print(
+        paste(var, round(sum(is.na(majors_occupations[var]) ) /
+                             nrow(majors_occupations) * 100,3),'%')
+    )
+}
+```
+
+```{r}
+ai_salary_majors |> 
+    arrange(cip4) |> 
+    slice_sample(n=9) |> 
+    knitr::kable(format = 'pipe')
+```
+
+```{r}
+majors_occupations |> 
+    arrange(cip4) |> 
+    slice_sample(n=9) |> 
+    knitr::kable(format = 'pipe')
+```
+
+```{r}
+majors_complete <- majors_occupations |>
+    left_join(ai_salary_majors[c('cip4',
+                                 'broad_field_short',
+                                 'median_starting_salary',
+                                 'median_salary_4yr'
+                                 )],by = 'cip4')
+
+```
+
+## Which majors are both safe from AI and well paid, and which are both exposed and low paid?
+
+```{r}
+head(majors_complete)
+```
+
+```{r}
+majors_complete_cat <- majors_complete |>
+    group_by(field_of_study) |>
+    summarise(ai_exposure_mean = mean(ai_exposure),
+              median_starting_salary = mean(median_starting_salary)) |>
+    mutate(
+        ai_cat = cut(ai_exposure_mean, breaks = -3:3),
+        salary_cat = cut(median_starting_salary, breaks = 4)
+    )
+
+levels(majors_complete_cat$ai_cat) <- list(
+    new1 = "old1",
+    new2 = "old2",
+    new3 = "old3")
+```
+
+
 
