@@ -1,5 +1,5 @@
 ---
-title: "readme"
+title: ""
 format: 
   gfm: default
 ---
@@ -72,8 +72,9 @@ Some questions to explore:
 pcks <- c(
     'fastverse', 'tidytable', 'psych',
     #'dbplyr', 'arrow', 'duckdb', 'duckplyr', 
-    #'ggplot2' 
-    'tinyplot' # plots 
+    'ggplot2'
+    #'tinyplot',
+    #'lattice','latticeExtra'
     )
 
 for (pkg in pcks) { 
@@ -88,6 +89,7 @@ for (pkg in pcks) {
 rm(list = ls(all.names = TRUE))
 
 set.seed(1994)
+options(scipen = 9999)
 ```
 
 ``` r
@@ -134,14 +136,14 @@ for (var in colnames(majors_occupations)){
 ai_salary_majors |> 
     arrange(cip4) |> 
     slice_sample(n=9) |> 
-    knitr::kable(format = 'pipe')
+    knitr::kable(format = 'rst')
 ```
 
 ```{r}
 majors_occupations |> 
     arrange(cip4) |> 
     slice_sample(n=9) |> 
-    knitr::kable(format = 'pipe')
+    knitr::kable(format = 'rst')
 ```
 
 ```{r}
@@ -157,24 +159,100 @@ majors_complete <- majors_occupations |>
 ## Which majors are both safe from AI and well paid, and which are both exposed and low paid?
 
 ```{r}
-head(majors_complete)
-```
-
-```{r}
 majors_complete_cat <- majors_complete |>
-    group_by(field_of_study) |>
+    group_by(occupation) |>
     summarise(ai_exposure_mean = mean(ai_exposure),
+              ai_exp_lang = mean(ai_exposure_language),
+              ai_exp_img = mean(ai_exposure_image),
               median_starting_salary = mean(median_starting_salary)) |>
     mutate(
         ai_cat = cut(ai_exposure_mean, breaks = -3:3),
-        salary_cat = cut(median_starting_salary, breaks = 4)
+        salary_cat = cut(median_starting_salary, breaks = 5,
+            labels = c("low", "mid_low", "mid", "mid_high", "high"),
+            ordered_result = T)
     )
 
-levels(majors_complete_cat$ai_cat) <- list(
-    new1 = "old1",
-    new2 = "old2",
-    new3 = "old3")
+head(majors_complete_cat) |> knitr::kable(format = 'rst')
 ```
 
+```{r}
+tinyplot(ai_exposure_mean ~ salary_cat, data = majors_complete_cat, type = type_barplot())
+# mid_low and high salary ranges have the most ai usage
 
+```
+
+```{r}
+majors_complete_cat <- majors_complete_cat |> mutate(
+    ai_exposure_rank = frank(ai_exposure_mean, ties.method = 'average')
+    )
+
+field_lowsalary_highia <- majors_complete_cat |>
+    arrange(desc(ai_exposure_rank)) |>
+    filter(salary_cat == 'low')
+
+head(field_lowsalary_highia, n = 10) |> knitr::kable(format = 'rst')
+# Occupations (fields of study) with high ai_exposure and low starting salary:
+# 1. Comparative Literature
+# 2. English language and literature
+# 3. Philosophy and religious studies
+# 4. Documentary production
+# 5. Linguistic, comparative, and related language studies
+
+```
+
+```{r}
+field_highsalary_lowia <- majors_complete_cat |>
+    arrange(ai_exposure_rank) |>
+    filter(salary_cat == 'high')
+
+head(field_highsalary_lowia, n = 10) |> knitr::kable(format = 'rst')
+# Occupations (fields of study) with high ai_exposure and low starting salary:
+# 1. Nuclear engineering thechnology
+# 2. Nursing education
+# 3. Arts in medicine
+# 4. Naval Architecture and marine engineering
+# 5. Bioethics/Medical ethics
+# All this 5 between 0 and 1 tipical deviation on ai exposure.
+```
+
+## Does the picture change when you look at language-task exposure versus image-task exposure?
+
+```{r}
+# High salary - low language ia
+majors_complete_cat |>
+    arrange(ai_exp_lang) |>
+    filter(salary_cat == 'high')
+```
+
+```{r}
+# Low salary - low language ia
+majors_complete_cat |>
+    arrange(ai_exp_lang) |>
+    filter(salary_cat == 'high')
+```
+
+```{r}
+majors_complete_cat |>
+    filter(salary_cat == 'high') |>
+    pivot_longer(
+        cols = c(ai_exp_lang, ai_exp_img),
+        names_to = "exposure_type",
+        values_to = "score"
+    ) |>
+    ggplot( aes( score, fill = exposure_type, alpha = exposure_type)) +
+        geom_histogram(
+            bins = 7,
+            position = 'identity') +
+        scale_alpha_manual(values = c('ai_exp_lang' = 0.5, 'ai_exp_img' = 0.9)) +
+        guides(alpha = "none") +
+        labs(
+            title = "AI Exposure: Language vs Image (Low Starting Salary)",
+            x = "AI Exposure Score (SD)",
+            y = "Count",
+            fill = "Exposure Type",
+        ) +
+        theme_minimal() +
+        theme(legend.position = "right")
+
+```
 
