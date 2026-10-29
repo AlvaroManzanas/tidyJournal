@@ -89,7 +89,7 @@ for (pkg in pcks) {
 rm(list = ls(all.names = TRUE))
 
 set.seed(1994)
-options(scipen = 9999)
+options(scipen = 999)
 ```
 
 ``` r
@@ -176,21 +176,14 @@ head(majors_complete_cat) |> knitr::kable(format = 'rst')
 ```
 
 ```{r}
-tinyplot(ai_exposure_mean ~ salary_cat, data = majors_complete_cat, type = type_barplot())
-# mid_low and high salary ranges have the most ai usage
-
-```
-
-```{r}
 majors_complete_cat <- majors_complete_cat |> mutate(
     ai_exposure_rank = frank(ai_exposure_mean, ties.method = 'average')
     )
 
-field_lowsalary_highia <- majors_complete_cat |>
+majors_complete_cat |>
     arrange(desc(ai_exposure_rank)) |>
-    filter(salary_cat == 'low')
-
-head(field_lowsalary_highia, n = 10) |> knitr::kable(format = 'rst')
+    filter(salary_cat == 'low') |>
+    head(field_lowsalary_highia, n = 10) |> knitr::kable(format = 'rst')
 # Occupations (fields of study) with high ai_exposure and low starting salary:
 # 1. Comparative Literature
 # 2. English language and literature
@@ -201,11 +194,10 @@ head(field_lowsalary_highia, n = 10) |> knitr::kable(format = 'rst')
 ```
 
 ```{r}
-field_highsalary_lowia <- majors_complete_cat |>
+majors_complete_cat |>
     arrange(ai_exposure_rank) |>
-    filter(salary_cat == 'high')
-
-head(field_highsalary_lowia, n = 10) |> knitr::kable(format = 'rst')
+    filter(salary_cat == 'high') |>
+    head(field_highsalary_lowia, n = 10) |> knitr::kable(format = 'rst')
 # Occupations (fields of study) with high ai_exposure and low starting salary:
 # 1. Nuclear engineering thechnology
 # 2. Nursing education
@@ -216,20 +208,6 @@ head(field_highsalary_lowia, n = 10) |> knitr::kable(format = 'rst')
 ```
 
 ## Does the picture change when you look at language-task exposure versus image-task exposure?
-
-```{r}
-# High salary - low language ia
-majors_complete_cat |>
-    arrange(ai_exp_lang) |>
-    filter(salary_cat == 'high')
-```
-
-```{r}
-# Low salary - low language ia
-majors_complete_cat |>
-    arrange(ai_exp_lang) |>
-    filter(salary_cat == 'high')
-```
 
 ```{r}
 majors_complete_cat |>
@@ -253,6 +231,46 @@ majors_complete_cat |>
         ) +
         theme_minimal() +
         theme(legend.position = "right")
+```
+
+AI exposure has less impact related to languages than images with high salary according the last histogram. It can be seen the blue bars filling the left side of the graph reflecting lower levels of AI exposure in language group. It can be said with this data there are more risk of AI exposure in image related occupations.
+
+## Do broad fields like Engineering, Health Professions, Business, and Humanities cluster together?
+
+```{r}
+majors_complete |>
+    filter(grepl("Engineering|Health|Business|Humanities", broad_field_short, ignore.case = TRUE))|>
+    mutate(
+        field_category = case_when(
+            grepl("Engineering", broad_field_short, ignore.case = TRUE) ~ "Engineering",
+            grepl("Health", broad_field_short, ignore.case = TRUE) ~ "Health",
+            grepl("Business", broad_field_short, ignore.case = TRUE) ~ "Business",
+            grepl("Humanities", broad_field_short, ignore.case = TRUE) ~ "Humanities"
+            ),
+        salary_cat = cut(median_starting_salary, breaks = 5,
+            labels = c("low", "mid_low", "mid", "mid_high", "high"),
+            ordered_result = T)
+        ) |>
+    group_by(field_category, salary_cat) |>
+    summarize(
+        ai_exposure = mean(ai_exposure),
+        salary_mean = mean(median_starting_salary)) |>
+    ggplot(aes(y = ai_exposure, x = salary_cat, fill = field_category)) +
+        geom_bar(stat = 'identity', position = 'dodge') +
+    labs(
+        title = "Mean AI Exposure by Salary Category and Field",
+        y = "Mean AI Exposure (SD)",
+        x = "Salary Category",
+        fill = "Field"
+    ) +
+    theme_minimal()
 
 ```
 
+Test clustering with Chi-Square and Cramer-V association. Contingency table, need categories.
+Also Kruskal or Anova with numeric
+
+```{r}
+
+
+```
